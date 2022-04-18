@@ -3,6 +3,9 @@
 module SPI_interface(
     input clk,
     input MISO,
+    //input setup,
+   // output reg [2:0] clk_div,
+    output reg [15:0] test,
     output reg sclk,
     output reg MOSI,
     output reg cs
@@ -32,27 +35,42 @@ parameter generic_crc       = 7'd0;
     reg [23:0] data_in_hold;
     reg [23:0] data_in_fin;
     
-    reg setup = 1'b1; 
+    reg setup_temp = 1'b1; 
     
-    reg clk_div = 8'd0;
+    reg temp = 1'b1;
+    
+    reg [3:0] clk_div = 8'd0;
+    
+    initial
+    begin
+        sclk = 0;
+        clk_div = 0;
+        MOSI = 0;
+        test = 16'd0;
+        counter = 0;
+        cs = 0;
+    end
+    
     
     //lower clk to 25 MHz
     always @(posedge clk)
     begin
-        if(clk_div == 8'd4)
+        if(clk_div == 3'd3)
         begin
-            clk_div <= 8'd0;
-            sclk = !sclk;
+            clk_div <= 3'd0;
+            sclk <= !sclk;
         end
-        else
+        if(clk_div != 3'd3)
         begin
             clk_div <= clk_div + 8'd1;
         end
-        if(setup == 1)
+        if(setup_temp == 1)
         begin
             //send idle command
-            data_to_send <= {0,1,idle,000000000000000000000000000000,generic_crc,1};
-            setup <= 0;
+            //data_to_send <= 48'b010000000000000000000000000000000000000000000001;
+            data_to_send   <= 48'b011001000000000000000000000000000000000000000001;
+            
+            setup_temp <= 0;
         end
     end
 ///////////////////////
@@ -60,29 +78,32 @@ parameter generic_crc       = 7'd0;
 ///////////////////////
 always @(posedge sclk)
 begin
-    if(data_to_send != 0)
-    begin
-        MOSI <= data_to_send[0];
-        data_to_send = data_to_send << 1;
-    end
+    data_to_send <= data_to_send << 1;
+    MOSI <= data_to_send[47];
+
 end
 
+
+    
     
 ///////////////////
 //read in data 
 ///////////////////
 always @(negedge sclk)
     begin
-        if(counter <= 5'd24) 
+        if(counter < 5'd24) 
         begin
             //read in and shift
             data_in_hold <= data_in_hold << 1;
-            data_in_hold[24] <= MISO;
+            data_in_hold[0] <= MISO;
+            counter <= counter + 1;
         end
         else
         begin
             //finished 24 bit data block for pixel
             data_in_fin <= data_in_hold;
+            counter <= 0;
+            test = 16'b1111111111111111;
         end
     end    
     
